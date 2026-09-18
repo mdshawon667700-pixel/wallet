@@ -394,6 +394,10 @@
                             <input type="date" id="goal-deadline" required class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-brand-500">
                         </div>
                     </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Fund Source (Account)</label>
+                        <select id="goal-source-account" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-brand-500"></select>
+                    </div>
                     <button type="submit" class="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3 rounded-xl shadow-md shadow-brand-500/20 transition text-sm">Add Savings Goal</button>
                 </form>
             </div>
@@ -617,7 +621,7 @@
         }
 
         function loadFromStorage() {
-            const saved = localStorage.getItem('moneyfy_pro_data_v3');
+            const saved = localStorage.getItem('moneyfy_pro_data_v4');
             if (saved) {
                 try {
                     appData = JSON.parse(saved);
@@ -637,12 +641,20 @@
         }
 
         function saveToStorage() {
-            localStorage.setItem('moneyfy_pro_data_v3', JSON.stringify(appData));
+            localStorage.setItem('moneyfy_pro_data_v4', JSON.stringify(appData));
+        }
+
+        // ==========================================
+        // FIX 1: Dynamic Net Balance Synchronization
+        // ==========================================
+        function getNetBalance() {
+            /** Dynamically computes the global net balance from live account sums */
+            return appData.accounts.reduce((sum, acc) => sum + acc.balance, 0);
         }
 
         function checkRecurringTransactions() {
             const currentMonthKey = new Date().toISOString().slice(0, 7);
-            const lastProcessed = localStorage.getItem('moneyfy_last_recurring_month_v3');
+            const lastProcessed = localStorage.getItem('moneyfy_last_recurring_month_v4');
 
             if (lastProcessed !== currentMonthKey) {
                 const todayStr = new Date().toISOString().split('T')[0];
@@ -664,7 +676,7 @@
                     }
                 });
 
-                localStorage.setItem('moneyfy_last_recurring_month_v3', currentMonthKey);
+                localStorage.setItem('moneyfy_last_recurring_month_v4', currentMonthKey);
                 saveToStorage();
             }
         }
@@ -819,12 +831,14 @@
             const expAccSelect = document.getElementById('exp-source');
             const debtAccSelect = document.getElementById('debt-account');
             const recAccSelect = document.getElementById('rec-account');
+            const goalAccSelect = document.getElementById('goal-source-account');
 
             const accountOptions = appData.accounts.map(a => `<option value="${a.name}">${a.name} (${appData.currency}${a.balance.toFixed(2)})</option>`).join('');
             if (incAccSelect) incAccSelect.innerHTML = accountOptions;
             if (expAccSelect) expAccSelect.innerHTML = accountOptions;
             if (debtAccSelect) debtAccSelect.innerHTML = accountOptions;
             if (recAccSelect) recAccSelect.innerHTML = accountOptions;
+            if (goalAccSelect) goalAccSelect.innerHTML = accountOptions;
         }
 
         // Account Manager
@@ -1099,7 +1113,9 @@
             renderAll();
         }
 
-        // Savings Goals Management
+        // ==========================================
+        // FIX 3: Savings Goal Contribution (Internal Transfer)
+        // ==========================================
         function addSavingsGoal(e) {
             e.preventDefault();
             const title = document.getElementById('goal-title').value.trim();
@@ -1124,10 +1140,22 @@
                 if (isNaN(amount) || amount <= 0) return;
                 if (amount > remaining) amount = remaining;
 
+                // Execute safe internal transfer from selected source account
+                const sourceAccountName = document.getElementById('goal-source-account')?.value || appData.accounts[0].name;
+                const sourceAcc = appData.accounts.find(a => a.name === sourceAccountName);
+
+                if (sourceAcc) {
+                    if (sourceAcc.balance < amount) {
+                        showModal('Error', `Insufficient funds in account "${sourceAcc.name}" for contribution.`, false);
+                        return;
+                    }
+                    sourceAcc.balance -= amount;
+                }
+
                 goal.saved += amount;
                 saveToStorage();
                 renderAll();
-                showModal('Goal Updated', `Added ${appData.currency}${amount.toFixed(2)} to "${goal.title}".`);
+                showModal('Goal Updated', `Transferred ${appData.currency}${amount.toFixed(2)} from ${sourceAcc ? sourceAcc.name : 'Account'} to "${goal.title}".`);
             });
         }
 
@@ -1198,6 +1226,19 @@
             renderAll();
         }
 
+        // ==========================================
+        // FIX 2: Expense Comparison Metric ("Exp. vs")
+        // ==========================================
+        function calculateExpenseComparison(currentMonthExpenses, previousMonthExpenses) {
+            /** Computes safe percentage changes handling zero-division edge cases */
+            if (previousMonthExpenses === 0) {
+                return currentMonthExpenses > 0 ? 100.0 : 0.0;
+            }
+            const difference = currentMonthExpenses - previousMonthExpenses;
+            const percentageChange = (difference / previousMonthExpenses) * 100;
+            return Math.round(percentageChange * 100) / 100;
+        }
+
         function exportDataJSON() {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
             const dlAnchorElem = document.createElement('a');
@@ -1228,7 +1269,7 @@
 
         function openResetModal() {
             if (confirm('Are you sure you want to reset all wallet data and settings?')) {
-                localStorage.removeItem('moneyfy_pro_data_v3');
+                localStorage.removeItem('moneyfy_pro_data_v4');
                 location.reload();
             }
         }
@@ -1236,7 +1277,7 @@
         function openExportModal() {
             const totalIncomeAll = appData.incomes.reduce((acc, curr) => acc + curr.amount, 0);
             const totalExpense = appData.expenses.reduce((acc, curr) => acc + curr.amount, 0);
-            const netBalance = totalIncomeAll - totalExpense;
+            const netBalance = getNetBalance();
 
             let report = `=== MYWALLET PRO MONTHLY REPORT ===\n`;
             report += `Currency: ${appData.currency}\n`;
@@ -1290,9 +1331,28 @@
 
         function renderDashboard() {
             const totalSalary = appData.incomes.filter(i => i.category === 'Salary').reduce((acc, curr) => acc + curr.amount, 0);
-            const totalIncomeAll = appData.incomes.reduce((acc, curr) => acc + curr.amount, 0);
             const totalExpense = appData.expenses.reduce((acc, curr) => acc + curr.amount, 0);
-            const netBalance = totalIncomeAll - totalExpense;
+            const netBalance = getNetBalance(); // Using upgraded dynamic sync logic
+
+            // Compute current vs previous month expense comparison
+            const now = new Date();
+            const currMonthKey = now.toISOString().slice(0, 7);
+            const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const prevMonthKey = prevDate.toISOString().slice(0, 7);
+
+            const currMonthExp = appData.expenses.filter(e => e.date.startsWith(currMonthKey)).reduce((sum, e) => sum + e.amount, 0);
+            const prevMonthExp = appData.expenses.filter(e => e.date.startsWith(prevMonthKey)).reduce((sum, e) => sum + e.amount, 0);
+            const expDiffPercent = calculateExpenseComparison(currMonthExp, prevMonthExp);
+
+            const expComparisonEl = document.getElementById('dash-exp-comparison');
+            const expDiffLabelEl = document.getElementById('dash-exp-diff-label');
+            if (expComparisonEl) {
+                expComparisonEl.innerText = `${expDiffPercent >= 0 ? '+' : ''}${expDiffPercent}%`;
+                expComparisonEl.className = `text-base font-bold ${expDiffPercent > 0 ? 'text-rose-500' : 'text-brand-500'}`;
+            }
+            if (expDiffLabelEl) {
+                expDiffLabelEl.innerText = `vs ${prevDate.toLocaleString('default', { month: 'short' })}`
+            }
 
             const totalDebtRemaining = appData.debts.reduce((acc, curr) => acc + (curr.total - curr.paid), 0);
             const totalDebtPaid = appData.debts.reduce((acc, curr) => acc + curr.paid, 0);
