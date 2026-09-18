@@ -1,216 +1,1536 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyWallet Pro</title>
-    <style>
-        :root {
-            --bg-color: #f8f9fa;
-            --card-bg: #ffffff;
-            --text-color: #212529;
-            --primary: #198754;
-            --danger: #dc3545;
-            --border-color: #dee2e6;
-        }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: auto; background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        h2 { font-size: 1.25rem; margin-top: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; }
-        .form-group { margin-bottom: 12px; display: flex; flex-direction: column; }
-        label { font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }
-        input, select { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; }
-        button { background: var(--primary); color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-top: 6px; }
-        button.danger { background: var(--danger); }
-        .card-item, .category-item { display: flex; justify-content: space-between; align-items: center; background: #f1f3f5; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; }
-        .summary-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .stat-card { background: #e9ecef; padding: 15px; border-radius: 8px; text-align: center; }
-    </style>
-</head>
-<body>
-
-<div class="container">
-    <h1>MyWallet Pro Dashboard</h1>
-    
-    <!-- Summary Section -->
-    <div class="summary-box">
-        <div class="stat-card">
-            <h3>Cash Balance</h3>
-            <p id="totalCash">€0.00</p>
-        </div>
-        <div class="stat-card">
-            <h3>Total Cards Balance</h3>
-            <p id="totalCards">€0.00</p>
-        </div>
-    </div>
-
-    <!-- 1. Settings: Bank Cards & Categories Management -->
-    <h2>Manage Bank Cards</h2>
-    <div class="form-group">
-        <input type="text" id="newCardName" placeholder="Card Name (e.g., Revolut, Visa)">
-        <input type="number" id="newCardBalance" placeholder="Initial Balance">
-        <button onclick="addCard()">Add Bank Card</button>
-    </div>
-    <div id="cardList"></div>
-
-    <h2>Manage Expense Categories</h2>
-    <div class="form-group">
-        <input type="text" id="newCategoryName" placeholder="New Category Name">
-        <button onclick="addCategory()">Add Category</button>
-    </div>
-    <div id="categoryList"></div>
-
-    <!-- 2. Transaction Logs (Income, Expense, Debt, Receivable) -->
-    <h2>Add Transaction</h2>
-    <div class="form-group">
-        <label>Type</label>
-        <select id="txType" onchange="toggleTxSource()">
-            <option value="income">Income</option>
-            <option value="expense">Expense</option>
-            <option value="debt">Debt Given/Taken</option>
-            <option value="receivable">Receivable</option>
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label>Category / Description</label>
-        <input type="text" id="txDesc" placeholder="Description or Category name">
-    </div>
-
-    <div class="form-group">
-        <label>Amount (€)</label>
-        <input type="number" id="txAmount" value="0" step="0.01">
-    </div>
-
-    <div class="form-group">
-        <label>Payment Source / Destination</label>
-        <select id="txSource">
-            <option value="cash">Cash Wallet</option>
-        </select>
-    </div>
-
-    <button onclick="saveTransaction()">Submit Transaction</button>
-</div>
-
-<script>
-    // State management storage initialization
-    let state = {
-        cash: 500.00,
-        cards: [{ id: 1, name: "Main Visa", balance: 1200.00 }],
-        categories: ["Rent/Housing", "Food & Groceries", "Transport", "Utilities", "Shopping", "Entertainment"],
-        transactions: []
-    };
-
-    function init() {
-        renderCards();
-        renderCategories();
-        updateSourcesDropdown();
-        updateSummary();
-    }
-
-    function renderCards() {
-        const list = document.getElementById('cardList');
-        list.innerHTML = '';
-        let totalCardBal = 0;
-        
-        state.cards.forEach((card, index) => {
-            totalCardBal += card.balance;
-            list.innerHTML += `
-                <div class="card-item">
-                    <span><strong>${card.name}</strong>: €${card.balance.toFixed(2)}</span>
-                    <button class="danger" onclick="deleteCard(${index})">Delete</button>
-                </div>
-            `;
-        });
-        document.getElementById('totalCards').innerText = `€${totalCardBal.toFixed(2)}`;
-        document.getElementById('totalCash').innerText = `€${state.cash.toFixed(2)}`;
-    }
-
-    function addCard() {
-        const name = document.getElementById('newCardName').value;
-        const balance = parseFloat(document.getElementById('newCardBalance').value) || 0;
-        if(name) {
-            state.cards.push({ id: Date.now(), name, balance });
-            document.getElementById('newCardName').value = '';
-            document.getElementById('newCardBalance').value = '';
-            init();
-        }
-    }
-
-    function deleteCard(index) {
-        state.cards.splice(index, 1);
-        init();
-    }
-
-    function renderCategories() {
-        const list = document.getElementById('categoryList');
-        list.innerHTML = '';
-        state.categories.forEach((cat, index) => {
-            list.innerHTML += `
-                <div class="category-item">
-                    <span>${cat}</span>
-                    <button class="danger" onclick="deleteCategory(${index})">Delete</button>
-                </div>
-            `;
-        });
-        updateSourcesDropdown();
-    }
-
-    function addCategory() {
-        const name = document.getElementById('newCategoryName').value;
-        if(name && !state.categories.includes(name)) {
-            state.categories.push(name);
-            document.getElementById('newCategoryName').value = '';
-            renderCategories();
-        }
-    }
-
-    function deleteCategory(index) {
-        state.categories.splice(index, 1);
-        renderCategories();
-    }
-
-    function updateSourcesDropdown() {
-        const sourceSelect = document.getElementById('txSource');
-        sourceSelect.innerHTML = `<option value="cash">Cash Wallet</option>`;
-        state.cards.forEach(card => {
-            sourceSelect.innerHTML += `<option value="card_${card.id}">${card.name}</option>`;
-        });
-    }
-
-    function toggleTxSource() {
-        // Handle logic adaptations per transaction type if required
-    }
-
-    function saveTransaction() {
-        const type = document.getElementById('txType').value;
-        const amount = parseFloat(document.getElementById('txAmount').value);
-        const source = document.getElementById('txSource').value;
-        
-        if (isNaN(amount) || amount <= 0) {
-            alert("Please provide a valid non-zero amount.");
-            return;
-        }
-
-        // Adjust balance based on source selection (Cash vs Card)
-        if (source === 'cash') {
-            if (type === 'income' || type === 'receivable') state.cash += amount;
-            else state.cash -= amount;
-        } else {
-            const cardId = parseInt(source.replace('card_', ''));
-            const card = state.cards.find(c => c.id === cardId);
-            if (card) {
-                if (type === 'income' || type === 'receivable') card.balance += amount;
-                else card.balance -= amount;
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Moneyfy Pro Wallet</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for Dynamic Pie/Doughnut Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                        }
+                    }
+                }
             }
         }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-950 text-gray-800 dark:text-gray-100 h-full flex flex-col justify-between selection:bg-brand-500 selection:text-white transition-colors duration-200">
+
+    <!-- Top Header -->
+    <header class="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 sticky top-0 z-30 px-4 py-3 flex items-center justify-between shadow-xs">
+        <div class="flex items-center space-x-2.5">
+            <div class="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center text-white font-bold shadow-md shadow-brand-500/20">
+                <i class="fa-solid fa-wallet text-sm"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-gray-900 dark:text-white leading-tight text-sm">MyWallet Pro</h1>
+                <p id="currentMonthYearLabel" class="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Loading...</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button onclick="toggleDarkMode()" id="darkModeToggleBtn" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+                <i class="fa-solid fa-moon text-xs"></i>
+            </button>
+            <button onclick="openExportModal()" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition" title="Export Report">
+                <i class="fa-solid fa-file-arrow-down text-xs"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Scrollable Container -->
+    <main class="flex-1 overflow-y-auto px-4 py-5 pb-28 hide-scrollbar">
         
-        init();
-        alert("Transaction recorded successfully!");
-    }
+        <!-- DASHBOARD TAB -->
+        <section id="tab-dashboard" class="space-y-5 tab-content">
+            <!-- Net Balance Summary Card -->
+            <div class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white rounded-3xl p-5 shadow-xl relative overflow-hidden border border-gray-800">
+                <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-brand-500/10 rounded-full blur-2xl"></div>
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-xs font-semibold tracking-wider uppercase text-gray-400">Net Balance</span>
+                    <span id="dash-ratio-badge" class="px-2.5 py-1 rounded-full text-xs font-medium bg-brand-500/20 text-brand-400 border border-brand-500/30">Stable</span>
+                </div>
+                <h2 id="dash-net-balance" class="text-3xl font-bold tracking-tight mb-4">$0.00</h2>
+                
+                <div class="grid grid-cols-2 gap-3 pt-3 border-t border-gray-800">
+                    <div>
+                        <p class="text-[11px] text-gray-400">Monthly Salary</p>
+                        <p id="dash-total-income" class="text-lg font-semibold text-brand-400">$0.00</p>
+                    </div>
+                    <div>
+                        <p class="text-[11px] text-gray-400">Monthly Expense</p>
+                        <p id="dash-total-expense" class="text-lg font-semibold text-rose-400">$0.00</p>
+                    </div>
+                </div>
+            </div>
 
-    // Initialize on load
-    init();
-</script>
+            <!-- Quick Metrics Grid -->
+            <div class="grid grid-cols-3 gap-2">
+                <div class="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
+                    <div class="flex items-center space-x-1.5 mb-2">
+                        <div class="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                            <i class="fa-solid fa-file-invoice-dollar text-[10px]"></i>
+                        </div>
+                        <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Debt</span>
+                    </div>
+                    <p id="dash-total-debt" class="text-base font-bold text-gray-900 dark:text-white">$0.00</p>
+                    <p id="dash-debt-status" class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Paid: $0.00</p>
+                </div>
 
+                <div class="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
+                    <div class="flex items-center space-x-1.5 mb-2">
+                        <div class="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                            <i class="fa-solid fa-hand-holding-dollar text-[10px]"></i>
+                        </div>
+                        <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Receivable</span>
+                    </div>
+                    <p id="dash-total-receivable" class="text-base font-bold text-gray-900 dark:text-white">$0.00</p>
+                    <p id="dash-receivable-status" class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Coll: $0.00</p>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
+                    <div class="flex items-center space-x-1.5 mb-2">
+                        <div class="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                            <i class="fa-solid fa-chart-line text-[10px]"></i>
+                        </div>
+                        <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Exp. vs</span>
+                    </div>
+                    <p id="dash-exp-comparison" class="text-base font-bold text-gray-900 dark:text-white">0%</p>
+                    <p id="dash-exp-diff-label" class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">vs prev</p>
+                </div>
+            </div>
+
+            <!-- Accounts & Cards Quick Overview -->
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-gray-900 dark:text-white text-sm">Bank Cards & Cash Breakdown</h3>
+                    <button onclick="switchTab('settings')" class="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Manage Accounts</button>
+                </div>
+                <div id="dash-accounts-grid" class="grid grid-cols-2 gap-2.5 pt-1">
+                    <!-- Dynamic Accounts -->
+                </div>
+            </div>
+
+            <!-- Budget Health Progress & Visual Section -->
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-gray-900 dark:text-white text-sm">Category Budgets Overview</h3>
+                    <button onclick="switchTab('settings')" class="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Manage Limits</button>
+                </div>
+                <div class="relative w-full h-52 flex items-center justify-center">
+                    <canvas id="budgetPieChart"></canvas>
+                </div>
+                <div id="dash-budget-progress-list" class="space-y-3 pt-2"></div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-gray-900 dark:text-white text-sm">Financial Breakdown</h3>
+                    <div class="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl text-xs">
+                        <button onclick="switchChartTab('expense')" id="btn-chart-exp" class="px-3 py-1 rounded-lg font-medium bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs transition">Expenses</button>
+                        <button onclick="switchChartTab('overview')" id="btn-chart-ov" class="px-3 py-1 rounded-lg font-medium text-gray-500 dark:text-gray-400 transition">Overview</button>
+                    </div>
+                </div>
+                <div class="relative w-full h-60 flex items-center justify-center">
+                    <canvas id="mainPieChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- INCOME TAB -->
+        <section id="tab-income" class="space-y-5 tab-content hidden">
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 id="income-form-title" class="font-bold text-gray-900 dark:text-white">Add Income Source</h3>
+                    <label class="flex items-center space-x-2 text-xs cursor-pointer">
+                        <input type="checkbox" id="inc-recurring" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+                        <span class="text-gray-600 dark:text-gray-300 font-medium">Monthly Recurring</span>
+                    </label>
+                </div>
+                <form id="incomeForm" onsubmit="handleIncomeSubmit(event)" class="space-y-3">
+                    <input type="hidden" id="inc-edit-id">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Source Name / Description</label>
+                        <input type="text" id="inc-title" required placeholder="e.g., Monthly Salary, Client Project" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-brand-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount (<span class="currency-symbol">$</span>)</label>
+                            <input type="number" step="0.01" id="inc-amount" required placeholder="0.00" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Category</label>
+                            <select id="inc-category" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-brand-500"></select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Deposit To (Account/Card)</label>
+                            <select id="inc-account" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-brand-500"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date</label>
+                            <input type="date" id="inc-date" required class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-brand-500">
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button type="submit" id="income-submit-btn" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3 rounded-xl shadow-md shadow-brand-500/20 transition text-sm">Add Income</button>
+                        <button type="button" id="income-cancel-btn" onclick="resetIncomeForm()" class="hidden bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold px-4 py-3 rounded-xl transition text-sm">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-gray-900 dark:text-white text-sm">Income Entries (Current Month)</h3>
+                    <div class="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl text-xs">
+                        <button onclick="switchIncomeTab('list')" id="btn-inc-list" class="px-3 py-1 rounded-lg font-medium bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs transition">List</button>
+                        <button onclick="switchIncomeTab('chart')" id="btn-inc-chart" class="px-3 py-1 rounded-lg font-medium text-gray-500 dark:text-gray-400 transition">Sources</button>
+                    </div>
+                </div>
+                <div id="income-list-view" class="space-y-2.5"></div>
+                <div id="income-chart-view" class="hidden relative w-full h-56 flex items-center justify-center pt-2">
+                    <canvas id="incomePieChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- EXPENSE TAB -->
+        <section id="tab-expense" class="space-y-5 tab-content hidden">
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 id="expense-form-title" class="font-bold text-gray-900 dark:text-white">Add Expense</h3>
+                    <label class="flex items-center space-x-2 text-xs cursor-pointer">
+                        <input type="checkbox" id="exp-recurring" class="rounded text-rose-500 focus:ring-rose-500 w-4 h-4">
+                        <span class="text-gray-600 dark:text-gray-300 font-medium">Monthly Recurring</span>
+                    </label>
+                </div>
+                <form id="expenseForm" onsubmit="handleExpenseSubmit(event)" class="space-y-3">
+                    <input type="hidden" id="exp-edit-id">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Expense Title</label>
+                        <input type="text" id="exp-title" required placeholder="e.g., Supermarket, Electric Bill" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-rose-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount (<span class="currency-symbol">$</span>)</label>
+                            <input type="number" step="0.01" id="exp-amount" required placeholder="0.00" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-rose-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Category</label>
+                            <select id="exp-category" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-rose-500"></select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Pay From (Account/Card)</label>
+                            <select id="exp-source" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-rose-500"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date</label>
+                            <input type="date" id="exp-date" required class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-rose-500">
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button type="submit" id="expense-submit-btn" class="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-semibold py-3 rounded-xl shadow-md shadow-rose-500/20 transition text-sm">Add Expense</button>
+                        <button type="button" id="expense-cancel-btn" onclick="resetExpenseForm()" class="hidden bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold px-4 py-3 rounded-xl transition text-sm">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-3">
+                <h3 class="font-bold text-gray-900 dark:text-white text-sm">Expense History (Current Month)</h3>
+                <div id="expense-list" class="space-y-2.5"></div>
+            </div>
+        </section>
+
+        <!-- DEBT & RECEIVABLES TAB -->
+        <section id="tab-debt" class="space-y-5 tab-content hidden">
+            <div class="flex space-x-1 bg-gray-200 dark:bg-gray-800 p-1 rounded-2xl">
+                <button onclick="switchDebtSubTab('debts')" id="btn-subtab-debts" class="flex-1 py-2 rounded-xl font-semibold text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs transition">Manage Debts</button>
+                <button onclick="switchDebtSubTab('receivables')" id="btn-subtab-receivables" class="flex-1 py-2 rounded-xl font-semibold text-xs text-gray-500 dark:text-gray-400 transition">Receivables</button>
+            </div>
+
+            <!-- Debts Sub-section -->
+            <div id="subtab-debts-content" class="space-y-5">
+                <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+                    <h3 class="font-bold text-gray-900 dark:text-white">Manage Debts & Loans</h3>
+                    <form id="debtForm" onsubmit="addDebt(event)" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Debt Name / Loan Title</label>
+                            <input type="text" id="debt-title" required placeholder="e.g., Credit Card, Car Loan, Friend" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Total Debt (<span class="currency-symbol">$</span>)</label>
+                                <input type="number" step="0.01" id="debt-total" required placeholder="5000" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Payment Rule</label>
+                                <select id="debt-pay-type" onchange="toggleDebtInputType()" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-amber-500">
+                                    <option value="amount">Fixed Amount</option>
+                                    <option value="percentage">Percentage (%)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label id="debt-pay-label" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Monthly Payment</label>
+                                <input type="number" step="0.01" id="debt-pay-value" required placeholder="200" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Due Date (Deadline)</label>
+                                <input type="date" id="debt-deadline" required class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-amber-500">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Pay To (Lender/Bank)</label>
+                                <input type="text" id="debt-payee" required placeholder="e.g. Chase Bank / John" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Paid From (Account/Card)</label>
+                                <select id="debt-account" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-amber-500"></select>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-xl shadow-md shadow-amber-500/20 transition text-sm">Add Debt Account</button>
+                    </form>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-3">
+                    <h3 class="font-bold text-gray-900 dark:text-white text-sm">Active Debt Status</h3>
+                    <div id="debt-list" class="space-y-3"></div>
+                </div>
+            </div>
+
+            <!-- Receivables Sub-section -->
+            <div id="subtab-receivables-content" class="space-y-5 hidden">
+                <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+                    <h3 class="font-bold text-gray-900 dark:text-white">Add Receivable (Money Owed to You)</h3>
+                    <form id="receivableForm" onsubmit="addReceivable(event)" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Debtor Name / Description</label>
+                            <input type="text" id="rec-title" required placeholder="e.g., Loan to Mark, Freelance Advance" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Total Amount (<span class="currency-symbol">$</span>)</label>
+                                <input type="number" step="0.01" id="rec-total" required placeholder="1000" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Expected Date</label>
+                                <input type="date" id="rec-deadline" required class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Credited / Collected To (Account)</label>
+                            <select id="rec-account" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500"></select>
+                        </div>
+                        <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl shadow-md shadow-emerald-500/20 transition text-sm">Add Receivable Account</button>
+                    </form>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-3">
+                    <h3 class="font-bold text-gray-900 dark:text-white text-sm">Active Receivables Status</h3>
+                    <div id="receivable-list" class="space-y-3"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SETTINGS TAB -->
+        <section id="tab-settings" class="space-y-5 tab-content hidden">
+            <!-- Currency & Preferences -->
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+                <h3 class="font-bold text-gray-900 dark:text-white">Preferences & Currency</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Currency Symbol</label>
+                        <select id="setting-currency" onchange="updateCurrencySetting(this.value)" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-brand-500">
+                            <option value="$">$ (USD)</option>
+                            <option value="€">€ (EUR)</option>
+                            <option value="£">£ (GBP)</option>
+                            <option value="৳">৳ (BDT)</option>
+                            <option value="¥">¥ (JPY)</option>
+                            <option value="₹">₹ (INR)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">App Theme</label>
+                        <button onclick="toggleDarkMode()" class="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 py-2.5 rounded-xl text-xs font-semibold text-gray-800 dark:text-gray-200 transition flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-circle-half-stroke"></i>
+                            <span id="themeButtonLabel">Toggle Mode</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bank Cards & Cash Accounts Manager -->
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+                <h3 class="font-bold text-gray-900 dark:text-white">Bank Cards & Cash Accounts</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Add or manage your cash drawer and bank debit/credit cards.</p>
+                <div class="flex space-x-2">
+                    <input type="text" id="new-account-name" placeholder="Account Name (e.g., Chase Card)" class="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-900 dark:text-white">
+                    <input type="number" step="0.01" id="new-account-bal" placeholder="Initial Balance" class="w-28 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-900 dark:text-white">
+                    <button onclick="addAccount()" class="bg-brand-500 text-white px-4 py-2 rounded-xl text-xs font-semibold hover:bg-brand-600 transition"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div id="accounts-management-list" class="space-y-2 pt-2"></div>
+            </div>
+
+            <!-- Budget Limit Manager & Category Manager -->
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+                <h3 class="font-bold text-gray-900 dark:text-white">Expense Categories & Budget Limits</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Add, rename, or delete expense categories and adjust monthly spending thresholds.</p>
+                <div class="flex space-x-2">
+                    <input type="text" id="new-exp-cat" placeholder="New Category Name" class="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-900 dark:text-white">
+                    <input type="number" id="new-exp-limit" placeholder="Monthly Limit" class="w-28 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-900 dark:text-white">
+                    <button onclick="addCustomExpenseCategory()" class="bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-semibold hover:bg-rose-600 transition"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div id="budget-limits-container" class="space-y-3 pt-2"></div>
+            </div>
+
+            <!-- Income Categories -->
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+                <h3 class="font-bold text-gray-900 dark:text-white">Income Categories</h3>
+                <div class="flex space-x-2">
+                    <input type="text" id="new-inc-cat" placeholder="e.g., Bonus, Rental" class="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-900 dark:text-white">
+                    <button onclick="addCustomIncomeCategory()" class="bg-brand-500 text-white px-4 py-2 rounded-xl text-xs font-semibold hover:bg-brand-600 transition"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div id="active-inc-categories-list" class="flex flex-wrap gap-1.5 pt-1"></div>
+            </div>
+
+            <!-- Data Actions -->
+            <div class="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-3">
+                <h3 class="font-bold text-gray-900 dark:text-white">Data Management</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="exportDataJSON()" class="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 py-3 rounded-xl font-medium text-xs text-gray-800 dark:text-gray-200 transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Backup JSON</span>
+                    </button>
+                    <button onclick="openResetModal()" class="bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-950/50 py-3 rounded-xl font-medium text-xs text-rose-600 dark:text-rose-400 transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-trash-can"></i>
+                        <span>Reset All Data</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-lg border-t border-gray-200 dark:border-gray-800 px-3 py-2 flex justify-around items-center z-40 shadow-lg">
+        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center py-1 px-3 text-brand-600 dark:text-brand-400 transition">
+            <i class="fa-solid fa-house text-lg mb-0.5"></i>
+            <span class="text-[10px] font-semibold">Home</span>
+        </button>
+        <button onclick="switchTab('income')" id="nav-income" class="flex flex-col items-center py-1 px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 transition">
+            <i class="fa-solid fa-circle-plus text-lg mb-0.5"></i>
+            <span class="text-[10px] font-medium">Income</span>
+        </button>
+        <button onclick="switchTab('expense')" id="nav-expense" class="flex flex-col items-center py-1 px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 transition">
+            <i class="fa-solid fa-receipt text-lg mb-0.5"></i>
+            <span class="text-[10px] font-medium">Expenses</span>
+        </button>
+        <button onclick="switchTab('debt')" id="nav-debt" class="flex flex-col items-center py-1 px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 transition">
+            <i class="fa-solid fa-credit-card text-lg mb-0.5"></i>
+            <span class="text-[10px] font-medium">Debt & Rec</span>
+        </button>
+        <button onclick="switchTab('settings')" id="nav-settings" class="flex flex-col items-center py-1 px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 transition">
+            <i class="fa-solid fa-gear text-lg mb-0.5"></i>
+            <span class="text-[10px] font-medium">Settings</span>
+        </button>
+    </nav>
+
+    <!-- Export Report Modal -->
+    <div id="exportModal" class="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-900 rounded-3xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-gray-900 dark:text-white text-base">Monthly Financial Report</h3>
+                <button onclick="closeExportModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div id="exportTextPreview" class="bg-gray-50 dark:bg-gray-800 p-3 rounded-2xl text-xs font-mono text-gray-700 dark:text-gray-300 max-h-64 overflow-y-auto whitespace-pre-line">Loading report...</div>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="copyReportText()" class="bg-gray-900 dark:bg-gray-800 text-white py-3 rounded-xl font-semibold text-xs hover:bg-gray-800 transition">Copy Report</button>
+                <button onclick="closeExportModal()" class="bg-brand-500 text-white py-3 rounded-xl font-semibold text-xs hover:bg-brand-600 transition">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Message Modal -->
+    <div id="customModal" class="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-900 rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-2xl text-center">
+            <div id="modalIconContainer" class="w-12 h-12 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center mx-auto text-xl">
+                <i class="fa-solid fa-check"></i>
+            </div>
+            <h3 id="modalTitle" class="font-bold text-gray-900 dark:text-white text-lg">Notification</h3>
+            <p id="modalMessage" class="text-sm text-gray-500 dark:text-gray-400">Message content here...</p>
+            <button onclick="closeModal()" class="w-full bg-gray-900 dark:bg-gray-800 text-white py-3 rounded-xl font-semibold text-sm hover:bg-gray-800 transition">Got it</button>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let appData = {
+            incomes: [],
+            expenses: [],
+            debts: [],
+            receivables: [],
+            accounts: [
+                { id: 1, name: 'Cash', balance: 500 },
+                { id: 2, name: 'Chase Bank Card', balance: 2500 },
+                { id: 3, name: 'Bank of America Card', balance: 1200 }
+            ],
+            categories: {
+                income: ['Salary', 'Freelance/Overtime', 'Business', 'Investment', 'Gifts', 'Other'],
+                expense: ['Rent/Housing', 'Food & Groceries', 'Transport', 'Utilities', 'Shopping', 'Entertainment', 'Healthcare', 'Debt Payment', 'Others']
+            },
+            budgets: {
+                'Rent/Housing': 1200,
+                'Food & Groceries': 400,
+                'Transport': 200,
+                'Utilities': 150,
+                'Shopping': 200,
+                'Entertainment': 150,
+                'Healthcare': 100,
+                'Debt Payment': 300,
+                'Others': 100
+            },
+            currency: '$',
+            darkMode: false
+        };
+
+        let currentChartTab = 'expense';
+        let mainChartInstance = null;
+        let incomeChartInstance = null;
+        let budgetPieInstance = null;
+        let currentIncomeView = 'list';
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadFromStorage();
+            checkRecurringTransactions();
+            setDefaultDates();
+            renderAll();
+            initCharts();
+            applyTheme();
+        });
+
+        function setDefaultDates() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('inc-date').value = todayStr;
+            document.getElementById('exp-date').value = todayStr;
+
+            const d = new Date();
+            d.setDate(d.getDate() + 30);
+            const defaultDeadline = d.toISOString().split('T')[0];
+            document.getElementById('debt-deadline').value = defaultDeadline;
+            const recDeadlineEl = document.getElementById('rec-deadline');
+            if (recDeadlineEl) recDeadlineEl.value = defaultDeadline;
+
+            const now = new Date();
+            const monthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+            document.getElementById('currentMonthYearLabel').innerText = monthName;
+        }
+
+        function loadFromStorage() {
+            const saved = localStorage.getItem('moneyfy_pro_data_v2');
+            if (saved) {
+                try {
+                    appData = JSON.parse(saved);
+                    if (!appData.accounts) appData.accounts = [{ id: 1, name: 'Cash', balance: 500 }, { id: 2, name: 'Chase Bank Card', balance: 2000 }];
+                    if (!appData.receivables) appData.receivables = [];
+                } catch(e) {
+                    console.error("Failed to load local storage", e);
+                }
+            } else {
+                appData.incomes = [{ id: 1, title: 'Monthly Salary', amount: 3500, category: 'Salary', account: 'Chase Bank Card', date: new Date().toISOString().split('T')[0], recurring: true }];
+                appData.expenses = [{ id: 1, title: 'Apartment Rent', amount: 1200, category: 'Rent/Housing', account: 'Chase Bank Card', date: new Date().toISOString().split('T')[0], recurring: true }];
+                appData.debts = [{ id: 1, title: 'Car Loan', total: 8000, paid: 1600, payType: 'amount', payValue: 300, payee: 'Chase Bank', account: 'Chase Bank Card', deadline: '2026-12-31' }];
+                appData.receivables = [{ id: 1, title: 'Loan to Mark', total: 500, collected: 100, account: 'Cash', deadline: '2026-08-30' }];
+                saveToStorage();
+            }
+        }
+
+        function saveToStorage() {
+            localStorage.setItem('moneyfy_pro_data_v2', JSON.stringify(appData));
+        }
+
+        function checkRecurringTransactions() {
+            const currentMonthKey = new Date().toISOString().slice(0, 7);
+            const lastProcessed = localStorage.getItem('moneyfy_last_recurring_month_v2');
+
+            if (lastProcessed !== currentMonthKey) {
+                const todayStr = new Date().toISOString().split('T')[0];
+                appData.incomes.filter(i => i.recurring).forEach(inc => {
+                    const exists = appData.incomes.some(i => i.title === inc.title && i.date.startsWith(currentMonthKey));
+                    if (!exists) {
+                        appData.incomes.push({ id: Date.now() + Math.random(), title: inc.title, amount: inc.amount, category: inc.category, account: inc.account || 'Cash', date: todayStr, recurring: true });
+                        const acc = appData.accounts.find(a => a.name === (inc.account || 'Cash'));
+                        if (acc) acc.balance += inc.amount;
+                    }
+                });
+
+                appData.expenses.filter(e => e.recurring).forEach(exp => {
+                    const exists = appData.expenses.some(e => e.title === exp.title && e.date.startsWith(currentMonthKey));
+                    if (!exists) {
+                        appData.expenses.push({ id: Date.now() + Math.random(), title: exp.title, amount: exp.amount, category: exp.category, account: exp.account || 'Cash', date: todayStr, recurring: true });
+                        const acc = appData.accounts.find(a => a.name === (exp.account || 'Cash'));
+                        if (acc) acc.balance -= exp.amount;
+                    }
+                });
+
+                localStorage.setItem('moneyfy_last_recurring_month_v2', currentMonthKey);
+                saveToStorage();
+            }
+        }
+
+        function toggleDarkMode() {
+            appData.darkMode = !appData.darkMode;
+            saveToStorage();
+            applyTheme();
+        }
+
+        function applyTheme() {
+            const htmlEl = document.documentElement;
+            const btnLabel = document.getElementById('themeButtonLabel');
+            const icon = document.querySelector('#darkModeToggleBtn i');
+
+            if (appData.darkMode) {
+                htmlEl.classList.add('dark');
+                if (btnLabel) btnLabel.innerText = "Dark Mode (On)";
+                if (icon) icon.className = "fa-solid fa-sun text-xs";
+            } else {
+                htmlEl.classList.remove('dark');
+                if (btnLabel) btnLabel.innerText = "Dark Mode (Off)";
+                if (icon) icon.className = "fa-solid fa-moon text-xs";
+            }
+            if (budgetPieInstance) updateBudgetPieChart();
+            if (mainChartInstance) updateCharts();
+            if (incomeChartInstance) updateIncomeChart();
+        }
+
+        function updateCurrencySetting(val) {
+            appData.currency = val;
+            saveToStorage();
+            updateCurrencyUI();
+        }
+
+        function updateCurrencyUI() {
+            document.querySelectorAll('.currency-symbol').forEach(el => el.innerText = appData.currency);
+            const settingCurr = document.getElementById('setting-currency');
+            if (settingCurr) settingCurr.value = appData.currency;
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+            ['dashboard', 'income', 'expense', 'debt', 'settings'].forEach(t => {
+                const navBtn = document.getElementById(`nav-${t}`);
+                if (!navBtn) return;
+                navBtn.classList.remove('text-brand-600', 'dark:text-brand-400');
+                navBtn.classList.add('text-gray-400', 'dark:text-gray-500');
+                navBtn.querySelector('span').classList.remove('font-semibold');
+                navBtn.querySelector('span').classList.add('font-medium');
+            });
+
+            const activeNav = document.getElementById(`nav-${tabId}`);
+            if (activeNav) {
+                activeNav.classList.remove('text-gray-400', 'dark:text-gray-500');
+                activeNav.classList.add('text-brand-600', 'dark:text-brand-400');
+                activeNav.querySelector('span').classList.remove('font-medium');
+                activeNav.querySelector('span').classList.add('font-semibold');
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (tabId === 'dashboard') {
+                updateCharts();
+                updateBudgetPieChart();
+            } else if (tabId === 'income') {
+                updateIncomeChart();
+            }
+        }
+
+        function switchDebtSubTab(sub) {
+            const btnDebts = document.getElementById('btn-subtab-debts');
+            const btnRec = document.getElementById('btn-subtab-receivables');
+            const contentDebts = document.getElementById('subtab-debts-content');
+            const contentRec = document.getElementById('subtab-receivables-content');
+
+            if (sub === 'debts') {
+                btnDebts.className = "flex-1 py-2 rounded-xl font-semibold text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs transition";
+                btnRec.className = "flex-1 py-2 rounded-xl font-semibold text-xs text-gray-500 dark:text-gray-400 transition";
+                contentDebts.classList.remove('hidden');
+                contentRec.classList.add('hidden');
+            } else {
+                btnRec.className = "flex-1 py-2 rounded-xl font-semibold text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs transition";
+                btnDebts.className = "flex-1 py-2 rounded-xl font-semibold text-xs text-gray-500 dark:text-gray-400 transition";
+                contentRec.classList.remove('hidden');
+                contentDebts.classList.add('hidden');
+            }
+        }
+
+        function switchIncomeTab(view) {
+            currentIncomeView = view;
+            const btnList = document.getElementById('btn-inc-list');
+            const btnChart = document.getElementById('btn-inc-chart');
+            const listView = document.getElementById('income-list-view');
+            const chartView = document.getElementById('income-chart-view');
+
+            if (view === 'list') {
+                btnList.className = "px-3 py-1 rounded-lg font-medium bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs transition";
+                btnChart.className = "px-3 py-1 rounded-lg font-medium text-gray-500 dark:text-gray-400 transition";
+                listView.classList.remove('hidden');
+                chartView.classList.add('hidden');
+            } else {
+                btnChart.className = "px-3 py-1 rounded-lg font-medium bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs transition";
+                btnList.className = "px-3 py-1 rounded-lg font-medium text-gray-500 dark:text-gray-400 transition";
+                listView.classList.add('hidden');
+                chartView.classList.remove('hidden');
+                updateIncomeChart();
+            }
+        }
+
+        function showModal(title, message, isSuccess = true) {
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalMessage').innerText = message;
+            const iconContainer = document.getElementById('modalIconContainer');
+            if (isSuccess) {
+                iconContainer.className = "w-12 h-12 rounded-full bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto text-xl";
+                iconContainer.innerHTML = '<i class="fa-solid fa-check"></i>';
+            } else {
+                iconContainer.className = "w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto text-xl";
+                iconContainer.innerHTML = '<i class="fa-solid fa-exclamation"></i>';
+            }
+            document.getElementById('customModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('customModal').classList.add('hidden');
+        }
+
+        function populateDropdowns() {
+            const incSelect = document.getElementById('inc-category');
+            const expSelect = document.getElementById('exp-category');
+            const incAccSelect = document.getElementById('inc-account');
+            const expAccSelect = document.getElementById('exp-source');
+            const debtAccSelect = document.getElementById('debt-account');
+            const recAccSelect = document.getElementById('rec-account');
+
+            if (incSelect) incSelect.innerHTML = appData.categories.income.map(c => `<option value="${c}">${c}</option>`).join('');
+            if (expSelect) expSelect.innerHTML = appData.categories.expense.map(c => `<option value="${c}">${c}</option>`).join('');
+
+            const accountOptions = appData.accounts.map(a => `<option value="${a.name}">${a.name} (${appData.currency}${a.balance.toFixed(2)})</option>`).join('');
+            if (incAccSelect) incAccSelect.innerHTML = accountOptions;
+            if (expAccSelect) expAccSelect.innerHTML = accountOptions;
+            if (debtAccSelect) debtAccSelect.innerHTML = accountOptions;
+            if (recAccSelect) recAccSelect.innerHTML = accountOptions;
+        }
+
+        // Account / Bank Card Manager
+        function addAccount() {
+            const nameInput = document.getElementById('new-account-name');
+            const balInput = document.getElementById('new-account-bal');
+            const name = nameInput.value.trim();
+            const balance = parseFloat(balInput.value);
+
+            if (!name || isNaN(balance)) {
+                showModal('Error', 'Please provide a valid account name and initial balance.', false);
+                return;
+            }
+
+            appData.accounts.push({ id: Date.now(), name, balance });
+            saveToStorage();
+            nameInput.value = '';
+            balInput.value = '';
+            renderAll();
+            showModal('Success', `Account "${name}" added successfully!`);
+        }
+
+        function deleteAccount(id) {
+            if (appData.accounts.length <= 1) {
+                showModal('Error', 'You must maintain at least one active account/card.', false);
+                return;
+            }
+            appData.accounts = appData.accounts.filter(a => a.id !== id);
+            saveToStorage();
+            renderAll();
+        }
+
+        // Income Management
+        function handleIncomeSubmit(e) {
+            e.preventDefault();
+            const editId = document.getElementById('inc-edit-id').value;
+            const title = document.getElementById('inc-title').value.trim();
+            const amount = parseFloat(document.getElementById('inc-amount').value);
+            const category = document.getElementById('inc-category').value;
+            const account = document.getElementById('inc-account').value;
+            const date = document.getElementById('inc-date').value;
+            const recurring = document.getElementById('inc-recurring').checked;
+
+            if (!title || isNaN(amount)) return;
+
+            const accObj = appData.accounts.find(a => a.name === account);
+
+            if (editId) {
+                const item = appData.incomes.find(i => i.id == editId);
+                if (item) {
+                    // Revert old account balance
+                    const oldAcc = appData.accounts.find(a => a.name === item.account);
+                    if (oldAcc) oldAcc.balance -= item.amount;
+
+                    item.title = title;
+                    item.amount = amount;
+                    item.category = category;
+                    item.account = account;
+                    item.date = date;
+                    item.recurring = recurring;
+                }
+                if (accObj) accObj.balance += amount;
+                showModal('Updated', 'Income entry updated successfully!');
+            } else {
+                appData.incomes.push({ id: Date.now(), title, amount, category, account, date, recurring });
+                if (accObj) accObj.balance += amount;
+                showModal('Success', 'Income entry added successfully!');
+            }
+
+            saveToStorage();
+            renderAll();
+            resetIncomeForm();
+        }
+
+        function editIncome(id) {
+            const item = appData.incomes.find(i => i.id === id);
+            if (!item) return;
+
+            document.getElementById('inc-edit-id').value = item.id;
+            document.getElementById('inc-title').value = item.title;
+            document.getElementById('inc-amount').value = item.amount;
+            document.getElementById('inc-category').value = item.category;
+            document.getElementById('inc-account').value = item.account || appData.accounts[0].name;
+            document.getElementById('inc-date').value = item.date;
+            document.getElementById('inc-recurring').checked = item.recurring;
+
+            document.getElementById('income-form-title').innerText = "Edit Income Entry";
+            document.getElementById('income-submit-btn').innerText = "Update Income";
+            document.getElementById('income-cancel-btn').classList.remove('hidden');
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetIncomeForm() {
+            document.getElementById('incomeForm').reset();
+            document.getElementById('inc-edit-id').value = '';
+            document.getElementById('income-form-title').innerText = "Add Income Source";
+            document.getElementById('income-submit-btn').innerText = "Add Income";
+            document.getElementById('income-cancel-btn').classList.add('hidden');
+            setDefaultDates();
+        }
+
+        function deleteIncome(id) {
+            const item = appData.incomes.find(i => i.id === id);
+            if (item) {
+                const acc = appData.accounts.find(a => a.name === item.account);
+                if (acc) acc.balance -= item.amount;
+            }
+            appData.incomes = appData.incomes.filter(item => item.id !== id);
+            saveToStorage();
+            renderAll();
+        }
+
+        // Expense Management
+        function handleExpenseSubmit(e) {
+            e.preventDefault();
+            const editId = document.getElementById('exp-edit-id').value;
+            const title = document.getElementById('exp-title').value.trim();
+            const amount = parseFloat(document.getElementById('exp-amount').value);
+            const category = document.getElementById('exp-category').value;
+            const account = document.getElementById('exp-source').value;
+            const date = document.getElementById('exp-date').value;
+            const recurring = document.getElementById('exp-recurring').checked;
+
+            if (!title || isNaN(amount)) return;
+
+            const accObj = appData.accounts.find(a => a.name === account);
+
+            if (editId) {
+                const item = appData.expenses.find(e => e.id == editId);
+                if (item) {
+                    const oldAcc = appData.accounts.find(a => a.name === item.account);
+                    if (oldAcc) oldAcc.balance += item.amount;
+
+                    item.title = title;
+                    item.amount = amount;
+                    item.category = category;
+                    item.account = account;
+                    item.date = date;
+                    item.recurring = recurring;
+                }
+                if (accObj) accObj.balance -= amount;
+                showModal('Updated', 'Expense entry updated successfully!');
+            } else {
+                appData.expenses.push({ id: Date.now(), title, amount, category, account, date, recurring });
+                if (accObj) accObj.balance -= amount;
+                showModal('Success', 'Expense logged successfully!');
+            }
+
+            saveToStorage();
+            renderAll();
+            resetExpenseForm();
+        }
+
+        function editExpense(id) {
+            const item = appData.expenses.find(e => e.id === id);
+            if (!item) return;
+
+            document.getElementById('exp-edit-id').value = item.id;
+            document.getElementById('exp-title').value = item.title;
+            document.getElementById('exp-amount').value = item.amount;
+            document.getElementById('exp-category').value = item.category;
+            document.getElementById('exp-source').value = item.account || appData.accounts[0].name;
+            document.getElementById('exp-date').value = item.date;
+            document.getElementById('exp-recurring').checked = item.recurring;
+
+            document.getElementById('expense-form-title').innerText = "Edit Expense Entry";
+            document.getElementById('expense-submit-btn').innerText = "Update Expense";
+            document.getElementById('expense-cancel-btn').classList.remove('hidden');
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetExpenseForm() {
+            document.getElementById('expenseForm').reset();
+            document.getElementById('exp-edit-id').value = '';
+            document.getElementById('expense-form-title').innerText = "Add Expense";
+            document.getElementById('expense-submit-btn').innerText = "Add Expense";
+            document.getElementById('expense-cancel-btn').classList.add('hidden');
+            setDefaultDates();
+        }
+
+        function deleteExpense(id) {
+            const item = appData.expenses.find(e => e.id === id);
+            if (item) {
+                const acc = appData.accounts.find(a => a.name === item.account);
+                if (acc) acc.balance += item.amount;
+            }
+            appData.expenses = appData.expenses.filter(item => item.id !== id);
+            saveToStorage();
+            renderAll();
+        }
+
+        function toggleDebtInputType() {
+            const type = document.getElementById('debt-pay-type').value;
+            const label = document.getElementById('debt-pay-label');
+            const input = document.getElementById('debt-pay-value');
+            if (type === 'percentage') {
+                label.innerText = 'Monthly Payment (%)';
+                input.placeholder = '10';
+            } else {
+                label.innerText = `Monthly Payment (${appData.currency})`;
+                input.placeholder = '200';
+            }
+        }
+
+        function addDebt(e) {
+            e.preventDefault();
+            const title = document.getElementById('debt-title').value.trim();
+            const total = parseFloat(document.getElementById('debt-total').value);
+            const payType = document.getElementById('debt-pay-type').value;
+            const payValue = parseFloat(document.getElementById('debt-pay-value').value);
+            const deadline = document.getElementById('debt-deadline').value;
+            const payee = document.getElementById('debt-payee').value.trim();
+            const account = document.getElementById('debt-account').value;
+
+            if (!title || isNaN(total) || isNaN(payValue)) return;
+
+            appData.debts.push({ id: Date.now(), title, total, paid: 0, payType, payValue, deadline, payee, account });
+            saveToStorage();
+            renderAll();
+            document.getElementById('debtForm').reset();
+            setDefaultDates();
+            showModal('Success', 'Debt account created successfully!');
+        }
+
+        function payDebtInstallment(id) {
+            const debt = appData.debts.find(d => d.id === id);
+            if (!debt) return;
+
+            const remainingBalance = debt.total - debt.paid;
+            const defaultInstallment = debt.payType === 'percentage' ? (debt.total * debt.payValue / 100) : debt.payValue;
+
+            let promptVal = prompt(`Enter payment amount for "${debt.title}" (Remaining: ${appData.currency}${remainingBalance.toFixed(2)}):`, defaultInstallment.toFixed(2));
+            if (promptVal === null) return;
+
+            let installment = parseFloat(promptVal);
+            if (isNaN(installment) || installment <= 0) {
+                showModal('Invalid Amount', 'Please enter a valid payment amount.', false);
+                return;
+            }
+
+            if (installment > remainingBalance) installment = remainingBalance;
+
+            debt.paid += installment;
+            
+            // Deduct from selected account
+            const acc = appData.accounts.find(a => a.name === debt.account);
+            if (acc) acc.balance -= installment;
+
+            saveToStorage();
+            renderAll();
+            showModal('Debt Updated', `Paid ${appData.currency}${installment.toFixed(2)} from ${debt.account || 'Cash'}.`);
+        }
+
+        function deleteDebt(id) {
+            appData.debts = appData.debts.filter(d => d.id !== id);
+            saveToStorage();
+            renderAll();
+        }
+
+        function addReceivable(e) {
+            e.preventDefault();
+            const title = document.getElementById('rec-title').value.trim();
+            const total = parseFloat(document.getElementById('rec-total').value);
+            const deadline = document.getElementById('rec-deadline').value;
+            const account = document.getElementById('rec-account').value;
+
+            if (!title || isNaN(total)) return;
+
+            appData.receivables.push({ id: Date.now(), title, total, collected: 0, deadline, account });
+            saveToStorage();
+            renderAll();
+            document.getElementById('receivableForm').reset();
+            setDefaultDates();
+            showModal('Success', 'Receivable account added successfully!');
+        }
+
+        function collectReceivable(id) {
+            const rec = appData.receivables.find(r => r.id === id);
+            if (!rec) return;
+
+            const remainingBalance = rec.total - rec.collected;
+            let promptVal = prompt(`Enter collection amount for "${rec.title}" (Pending: ${appData.currency}${remainingBalance.toFixed(2)}):`, remainingBalance.toFixed(2));
+            if (promptVal === null) return;
+
+            let collection = parseFloat(promptVal);
+            if (isNaN(collection) || collection <= 0) {
+                showModal('Invalid Amount', 'Please enter a valid collection amount.', false);
+                return;
+            }
+
+            if (collection > remainingBalance) collection = remainingBalance;
+
+            rec.collected += collection;
+            
+            const acc = appData.accounts.find(a => a.name === rec.account);
+            if (acc) acc.balance += collection;
+
+            saveToStorage();
+            renderAll();
+            showModal('Collection Recorded', `Credited ${appData.currency}${collection.toFixed(2)} to ${rec.account || 'Cash'}.`);
+        }
+
+        function deleteReceivable(id) {
+            appData.receivables = appData.receivables.filter(r => r.id !== id);
+            saveToStorage();
+            renderAll();
+        }
+
+        // Category & Budget management
+        function addCustomExpenseCategory() {
+            const name = document.getElementById('new-exp-cat').value.trim();
+            const limit = parseFloat(document.getElementById('new-exp-limit').value);
+
+            if (!name || isNaN(limit)) {
+                showModal('Error', 'Provide a category name and monthly limit.', false);
+                return;
+            }
+
+            if (!appData.categories.expense.includes(name)) {
+                appData.categories.expense.push(name);
+                appData.budgets[name] = limit;
+                saveToStorage();
+                document.getElementById('new-exp-cat').value = '';
+                document.getElementById('new-exp-limit').value = '';
+                renderAll();
+                showModal('Category Added', `"${name}" added successfully.`);
+            }
+        }
+
+        function deleteExpenseCategory(cat) {
+            if (appData.categories.expense.length <= 1) {
+                showModal('Error', 'You must keep at least one expense category.', false);
+                return;
+            }
+            appData.categories.expense = appData.categories.expense.filter(c => c !== cat);
+            delete appData.budgets[cat];
+            saveToStorage();
+            renderAll();
+        }
+
+        function updateCategoryBudget(cat, val) {
+            const amt = parseFloat(val);
+            if (!isNaN(amt)) {
+                appData.budgets[cat] = amt;
+                saveToStorage();
+                renderBudgetProgress();
+                updateBudgetPieChart();
+            }
+        }
+
+        function addCustomIncomeCategory() {
+            const val = document.getElementById('new-inc-cat').value.trim();
+            if (!val) return;
+            if (!appData.categories.income.includes(val)) {
+                appData.categories.income.push(val);
+                saveToStorage();
+                document.getElementById('new-inc-cat').value = '';
+                renderAll();
+                showModal('Income Category Added', `"${val}" added successfully.`);
+            }
+        }
+
+        function deleteIncomeCategory(cat) {
+            if (appData.categories.income.length <= 1) return;
+            appData.categories.income = appData.categories.income.filter(c => c !== cat);
+            saveToStorage();
+            renderAll();
+        }
+
+        function exportDataJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", "moneyfy_wallet_backup.json");
+            document.body.appendChild(dlAnchorElem);
+            dlAnchorElem.click();
+            dlAnchorElem.remove();
+        }
+
+        function openResetModal() {
+            if (confirm('Are you sure you want to reset all wallet data and settings?')) {
+                localStorage.removeItem('moneyfy_pro_data_v2');
+                location.reload();
+            }
+        }
+
+        function openExportModal() {
+            const totalSalary = appData.incomes.filter(i => i.category === 'Salary').reduce((acc, curr) => acc + curr.amount, 0);
+            const totalExpense = appData.expenses.reduce((acc, curr) => acc + curr.amount, 0);
+            const totalIncomeAll = appData.incomes.reduce((acc, curr) => acc + curr.amount, 0);
+            const netBalance = totalIncomeAll - totalExpense;
+
+            let report = `=== MYWALLET PRO MONTHLY REPORT ===\n`;
+            report += `Currency: ${appData.currency}\n`;
+            report += `Total Income: ${appData.currency}${totalIncomeAll.toFixed(2)}\n`;
+            report += `Total Expenses: ${appData.currency}${totalExpense.toFixed(2)}\n`;
+            report += `Net Balance: ${appData.currency}${netBalance.toFixed(2)}\n\n`;
+            report += `--- ACCOUNTS BREAKDOWN ---\n`;
+            appData.accounts.forEach(a => {
+                report += `${a.name}: ${appData.currency}${a.balance.toFixed(2)}\n`;
+            });
+
+            document.getElementById('exportTextPreview').innerText = report;
+            document.getElementById('exportModal').classList.remove('hidden');
+        }
+
+        function closeExportModal() {
+            document.getElementById('exportModal').classList.add('hidden');
+        }
+
+        function copyReportText() {
+            const text = document.getElementById('exportTextPreview').innerText;
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showModal('Copied', 'Financial report copied to clipboard!');
+            } catch (err) {
+                console.error('Failed to copy', err);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function renderAll() {
+            populateDropdowns();
+            renderDashboard();
+            renderIncomes();
+            renderExpenses();
+            renderDebts();
+            renderReceivables();
+            renderBudgetSettings();
+            renderBudgetProgress();
+            renderAccountsManagement();
+            renderCategoryChips();
+            updateCurrencyUI();
+            if (mainChartInstance) updateCharts();
+            if (budgetPieInstance) updateBudgetPieChart();
+        }
+
+        function renderDashboard() {
+            const totalSalary = appData.incomes.filter(i => i.category === 'Salary').reduce((acc, curr) => acc + curr.amount, 0);
+            const totalIncomeAll = appData.incomes.reduce((acc, curr) => acc + curr.amount, 0);
+            const totalExpense = appData.expenses.reduce((acc, curr) => acc + curr.amount, 0);
+            const netBalance = totalIncomeAll - totalExpense;
+
+            const totalDebtRemaining = appData.debts.reduce((acc, curr) => acc + (curr.total - curr.paid), 0);
+            const totalDebtPaid = appData.debts.reduce((acc, curr) => acc + curr.paid, 0);
+            const totalReceivableRemaining = appData.receivables.reduce((acc, curr) => acc + (curr.total - curr.collected), 0);
+            const totalReceivableCollected = appData.receivables.reduce((acc, curr) => acc + curr.collected, 0);
+
+            document.getElementById('dash-net-balance').innerText = `${appData.currency}${netBalance.toFixed(2)}`;
+            document.getElementById('dash-total-income').innerText = `${appData.currency}${totalSalary.toFixed(2)}`;
+            document.getElementById('dash-total-expense').innerText = `${appData.currency}${totalExpense.toFixed(2)}`;
+            
+            document.getElementById('dash-total-debt').innerText = `${appData.currency}${totalDebtRemaining.toFixed(2)}`;
+            document.getElementById('dash-debt-status').innerText = `Paid: ${appData.currency}${totalDebtPaid.toFixed(2)}`;
+
+            document.getElementById('dash-total-receivable').innerText = `${appData.currency}${totalReceivableRemaining.toFixed(2)}`;
+            document.getElementById('dash-receivable-status').innerText = `Coll: ${appData.currency}${totalReceivableCollected.toFixed(2)}`;
+
+            // Accounts quick view grid
+            const accContainer = document.getElementById('dash-accounts-grid');
+            if (accContainer) {
+                accContainer.innerHTML = appData.accounts.map(acc => `
+                    <div class="bg-gray-50 dark:bg-gray-800 p-3 rounded-2xl border border-gray-100 dark:border-gray-700">
+                        <p class="text-[11px] text-gray-400 font-medium truncate">${acc.name}</p>
+                        <p class="text-sm font-bold text-gray-900 dark:text-white mt-0.5">${appData.currency}${acc.balance.toFixed(2)}</p>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function renderAccountsManagement() {
+            const container = document.getElementById('accounts-management-list');
+            if (!container) return;
+            container.innerHTML = appData.accounts.map(acc => `
+                <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-2.5 rounded-2xl border border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-credit-card text-xs text-brand-500"></i>
+                        <span class="text-xs font-semibold text-gray-800 dark:text-gray-200">${acc.name}</span>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-xs font-bold text-gray-900 dark:text-white">${appData.currency}${acc.balance.toFixed(2)}</span>
+                        <button onclick="deleteAccount(${acc.id})" class="text-gray-400 hover:text-rose-500 text-xs"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderBudgetProgress() {
+            const container = document.getElementById('dash-budget-progress-list');
+            if (!container) return;
+            const catExp = {};
+            appData.expenses.forEach(e => { catExp[e.category] = (catExp[e.category] || 0) + e.amount; });
+
+            const budgetKeys = Object.keys(appData.budgets);
+            if (budgetKeys.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-400 text-center py-2">No budget limits configured.</p>`;
+                return;
+            }
+
+            container.innerHTML = budgetKeys.map(cat => {
+                const spent = catExp[cat] || 0;
+                const limit = appData.budgets[cat] || 100;
+                const percent = Math.min(100, (spent / limit) * 100).toFixed(0);
+                const isOver = spent > limit;
+
+                return `
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs font-medium">
+                            <span class="text-gray-700 dark:text-gray-300">${cat}</span>
+                            <span class="${isOver ? 'text-rose-500 font-bold' : 'text-gray-500 dark:text-gray-400'}">${appData.currency}${spent.toFixed(2)} / ${appData.currency}${limit}</span>
+                        </div>
+                        <div class="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                            <div class="${isOver ? 'bg-rose-500' : 'bg-brand-500'} h-full rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderBudgetSettings() {
+            const container = document.getElementById('budget-limits-container');
+            if (!container) return;
+            container.innerHTML = Object.keys(appData.budgets).map(cat => `
+                <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-2.5 rounded-2xl border border-gray-100 dark:border-gray-700">
+                    <span class="text-xs font-semibold text-gray-800 dark:text-gray-200">${cat}</span>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs text-gray-400">${appData.currency}</span>
+                        <input type="number" value="${appData.budgets[cat]}" onchange="updateCategoryBudget('${cat}', this.value)" class="w-20 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-2 py-1 text-xs text-right text-gray-900 dark:text-white">
+                        <button onclick="deleteExpenseCategory('${cat}')" class="text-gray-400 hover:text-rose-500 text-xs px-1"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderCategoryChips() {
+            const container = document.getElementById('active-inc-categories-list');
+            if (!container) return;
+            container.innerHTML = appData.categories.income.map(c => `
+                <span class="inline-flex items-center space-x-1 bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 px-2.5 py-1 rounded-xl text-[11px] font-medium">
+                    <span>${c}</span>
+                    <button onclick="deleteIncomeCategory('${c}')" class="hover:text-rose-500 ml-1"><i class="fa-solid fa-xmark"></i></button>
+                </span>
+            `).join('');
+        }
+
+        function renderIncomes() {
+            const container = document.getElementById('income-list-view');
+            if (!container) return;
+            if (appData.incomes.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-400 text-center py-4">No income entries recorded yet.</p>`;
+                return;
+            }
+            container.innerHTML = appData.incomes.map(item => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-arrow-down text-xs"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900 dark:text-white text-sm">${item.title}</h4>
+                            <p class="text-[11px] text-gray-400"><span class="text-brand-600 dark:text-brand-400 font-medium">${item.category}</span> • Account: <strong class="text-gray-600 dark:text-gray-300">${item.account || 'Cash'}</strong> • ${item.date}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold text-brand-600 dark:text-brand-400 text-sm">+${appData.currency}${item.amount.toFixed(2)}</span>
+                        <button onclick="editIncome(${item.id})" class="text-gray-400 hover:text-brand-500 text-xs p-1"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteIncome(${item.id})" class="text-gray-400 hover:text-rose-500 text-xs p-1"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderExpenses() {
+            const container = document.getElementById('expense-list');
+            if (!container) return;
+            if (appData.expenses.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-400 text-center py-4">No expense entries recorded yet.</p>`;
+                return;
+            }
+            container.innerHTML = appData.expenses.map(item => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-receipt text-xs"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900 dark:text-white text-sm">${item.title}</h4>
+                            <p class="text-[11px] text-gray-400"><span class="text-rose-600 dark:text-rose-400 font-medium">${item.category}</span> • Paid From: <strong class="text-gray-600 dark:text-gray-300">${item.account || 'Cash'}</strong> • ${item.date}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold text-rose-600 dark:text-rose-400 text-sm">-${appData.currency}${item.amount.toFixed(2)}</span>
+                        <button onclick="editExpense(${item.id})" class="text-gray-400 hover:text-rose-500 text-xs p-1"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteExpense(${item.id})" class="text-gray-400 hover:text-rose-500 text-xs p-1"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderDebts() {
+            const container = document.getElementById('debt-list');
+            if (!container) return;
+            if (appData.debts.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-400 text-center py-4">No debts registered.</p>`;
+                return;
+            }
+            container.innerHTML = appData.debts.map(debt => {
+                const remaining = debt.total - debt.paid;
+                const monthlyDue = debt.payType === 'percentage' ? (debt.total * debt.payValue / 100) : debt.payValue;
+                const progress = Math.min(100, (debt.paid / debt.total) * 100).toFixed(0);
+
+                return `
+                    <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-3">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-semibold text-gray-900 dark:text-white text-sm">${debt.title}</h4>
+                                <p class="text-[11px] text-gray-400">Pay to: <strong class="text-gray-700 dark:text-gray-300">${debt.payee}</strong> via <strong class="text-gray-700 dark:text-gray-300">${debt.account || 'Cash'}</strong></p>
+                                <p class="text-[11px] text-gray-400 mt-0.5">Total: ${appData.currency}${debt.total.toFixed(2)} • Due/mo: ${appData.currency}${monthlyDue.toFixed(2)}</p>
+                            </div>
+                            <button onclick="deleteDebt(${debt.id})" class="text-gray-400 hover:text-rose-500 text-xs"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-xs font-medium">
+                                <span class="text-gray-500">Paid: <strong class="text-brand-600 dark:text-brand-400">${appData.currency}${debt.paid.toFixed(2)}</strong></span>
+                                <span class="text-gray-500">Rest: <strong class="text-rose-500">${appData.currency}${remaining.toFixed(2)}</strong></span>
+                            </div>
+                            <div class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div class="bg-brand-500 h-full rounded-full transition-all duration-500" style="width: ${progress}%"></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between pt-1">
+                            <span class="text-[11px] font-medium text-gray-400">${progress}% Paid off</span>
+                            <button onclick="payDebtInstallment(${debt.id})" class="bg-gray-900 dark:bg-gray-700 text-white px-3 py-1.5 rounded-xl font-medium text-xs shadow-sm">Pay Installment</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderReceivables() {
+            const container = document.getElementById('receivable-list');
+            if (!container) return;
+            if (!appData.receivables || appData.receivables.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-400 text-center py-4">No receivables registered.</p>`;
+                return;
+            }
+            container.innerHTML = appData.receivables.map(rec => {
+                const remaining = rec.total - rec.collected;
+                const progress = Math.min(100, (rec.collected / rec.total) * 100).toFixed(0);
+
+                return `
+                    <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-3">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-semibold text-gray-900 dark:text-white text-sm">${rec.title}</h4>
+                                <p class="text-[11px] text-gray-400">Credited To: <strong class="text-gray-700 dark:text-gray-300">${rec.account || 'Cash'}</strong> • Date: ${rec.deadline}</p>
+                                <p class="text-[11px] text-gray-400 mt-0.5">Total Owed: ${appData.currency}${rec.total.toFixed(2)}</p>
+                            </div>
+                            <button onclick="deleteReceivable(${rec.id})" class="text-gray-400 hover:text-rose-500 text-xs"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-xs font-medium">
+                                <span class="text-gray-500">Collected: <strong class="text-emerald-600 dark:text-emerald-400">${appData.currency}${rec.collected.toFixed(2)}</strong></span>
+                                <span class="text-gray-500">Pending: <strong class="text-amber-500">${appData.currency}${remaining.toFixed(2)}</strong></span>
+                            </div>
+                            <div class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: ${progress}%"></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between pt-1">
+                            <span class="text-[11px] font-medium text-gray-400">${progress}% Collected</span>
+                            <button onclick="collectReceivable(${rec.id})" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl font-medium text-xs shadow-sm">Collect Payment</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function initCharts() {
+            const ctxMain = document.getElementById('mainPieChart').getContext('2d');
+            mainChartInstance = new Chart(ctxMain, {
+                type: 'doughnut',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#64748b', '#06b6d4', '#10b981'],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, color: '#9ca3af', font: { size: 10, family: 'Inter' } } }
+                    },
+                    cutout: '70%'
+                }
+            });
+
+            const ctxInc = document.getElementById('incomePieChart').getContext('2d');
+            incomeChartInstance = new Chart(ctxInc, {
+                type: 'doughnut',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#64748b'], borderWidth: 0 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, color: '#9ca3af', font: { size: 10, family: 'Inter' } } } }, cutout: '65%' }
+            });
+
+            const ctxBudget = document.getElementById('budgetPieChart').getContext('2d');
+            budgetPieInstance = new Chart(ctxBudget, {
+                type: 'pie',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: ['#3b82f6', '#22c55e', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#10b981', '#f43f5e'] }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, color: '#9ca3af', font: { size: 10, family: 'Inter' } } } } }
+            });
+
+            updateCharts();
+            updateBudgetPieChart();
+        }
+
+        function switchChartTab(type) {
+            currentChartTab = type;
+            const btnExp = document.getElementById('btn-chart-exp');
+            const btnOv = document.getElementById('btn-chart-ov');
+            if (type === 'expense') {
+                btnExp.className = "px-3 py-1 rounded-lg font-medium bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs transition";
+                btnOv.className = "px-3 py-1 rounded-lg font-medium text-gray-500 dark:text-gray-400 transition";
+            } else {
+                btnOv.className = "px-3 py-1 rounded-lg font-medium bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs transition";
+                btnExp.className = "px-3 py-1 rounded-lg font-medium text-gray-500 dark:text-gray-400 transition";
+            }
+            updateCharts();
+        }
+
+        function updateCharts() {
+            if (!mainChartInstance) return;
+            if (currentChartTab === 'expense') {
+                const catMap = {};
+                appData.expenses.forEach(exp => { catMap[exp.category] = (catMap[exp.category] || 0) + exp.amount; });
+                mainChartInstance.data.labels = Object.keys(catMap);
+                mainChartInstance.data.datasets[0].data = Object.values(catMap);
+            } else {
+                const totalIncome = appData.incomes.reduce((a, b) => a + b.amount, 0);
+                const totalExpense = appData.expenses.reduce((a, b) => a + b.amount, 0);
+                const totalDebt = appData.debts.reduce((a, b) => a + (b.total - b.paid), 0);
+                const totalRec = appData.receivables.reduce((a, b) => a + (b.total - b.collected), 0);
+
+                mainChartInstance.data.labels = ['Income', 'Expenses', 'Debt', 'Receivable'];
+                mainChartInstance.data.datasets[0].data = [totalIncome, totalExpense, totalDebt, totalRec];
+                mainChartInstance.data.datasets[0].backgroundColor = ['#22c55e', '#ec4899', '#f59e0b', '#10b981'];
+            }
+            mainChartInstance.update();
+        }
+
+        function updateIncomeChart() {
+            if (!incomeChartInstance) return;
+            const catMap = {};
+            appData.incomes.forEach(inc => { catMap[inc.category] = (catMap[inc.category] || 0) + inc.amount; });
+            incomeChartInstance.data.labels = Object.keys(catMap);
+            incomeChartInstance.data.datasets[0].data = Object.values(catMap);
+            incomeChartInstance.update();
+        }
+
+        function updateBudgetPieChart() {
+            if (!budgetPieInstance) return;
+            const budgetKeys = Object.keys(appData.budgets);
+            budgetPieInstance.data.labels = budgetKeys;
+            budgetPieInstance.data.datasets[0].data = budgetKeys.map(k => appData.budgets[k]);
+            budgetPieInstance.update();
+        }
+    </script>
 </body>
 </html>
