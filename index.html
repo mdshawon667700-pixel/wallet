@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyWallet Pro - Dashboard</title>
+    <title>MyWallet Pro</title>
     <style>
         :root {
             --bg-color: #f8f9fa;
@@ -13,27 +13,25 @@
             --danger: #dc3545;
             --border-color: #dee2e6;
         }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg-color); color: var(--text-color); margin: 0; padding: 15px; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: auto; background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        h2 { font-size: 1.15rem; margin-top: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 6px; }
+        h2 { font-size: 1.25rem; margin-top: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; }
         .form-group { margin-bottom: 12px; display: flex; flex-direction: column; }
         label { font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }
         input, select { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; }
         button { background: var(--primary); color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-top: 6px; }
         button.danger { background: var(--danger); }
-        .item-row { display: flex; justify-content: space-between; align-items: center; background: #f1f3f5; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 0.95rem; }
+        .card-item, .category-item { display: flex; justify-content: space-between; align-items: center; background: #f1f3f5; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; }
         .summary-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
         .stat-card { background: #e9ecef; padding: 15px; border-radius: 8px; text-align: center; }
-        .stat-card h3 { font-size: 0.9rem; margin: 0 0 5px 0; color: #555; }
-        .stat-card p { font-size: 1.2rem; font-weight: bold; margin: 0; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>MyWallet Pro</h1>
+    <h1>MyWallet Pro Dashboard</h1>
     
-    <!-- Dashboard Summary -->
+    <!-- Summary Section -->
     <div class="summary-box">
         <div class="stat-card">
             <h3>Cash Balance</h3>
@@ -45,16 +43,15 @@
         </div>
     </div>
 
-    <!-- SETTINGS SECTION: Bank Cards -->
+    <!-- 1. Settings: Bank Cards & Categories Management -->
     <h2>Manage Bank Cards</h2>
     <div class="form-group">
-        <input type="text" id="newCardName" placeholder="Card Name (e.g. Revolut, Visa)">
-        <input type="number" id="newCardBalance" placeholder="Initial Balance" step="0.01">
+        <input type="text" id="newCardName" placeholder="Card Name (e.g., Revolut, Visa)">
+        <input type="number" id="newCardBalance" placeholder="Initial Balance">
         <button onclick="addCard()">Add Bank Card</button>
     </div>
     <div id="cardList"></div>
 
-    <!-- SETTINGS SECTION: Expense Categories -->
     <h2>Manage Expense Categories</h2>
     <div class="form-group">
         <input type="text" id="newCategoryName" placeholder="New Category Name">
@@ -62,35 +59,32 @@
     </div>
     <div id="categoryList"></div>
 
-    <!-- TRANSACTION LOGGING SECTION -->
-    <h2>New Transaction</h2>
+    <!-- 2. Transaction Logs (Income, Expense, Debt, Receivable) -->
+    <h2>Add Transaction</h2>
     <div class="form-group">
         <label>Type</label>
-        <select id="txType">
+        <select id="txType" onchange="toggleTxSource()">
             <option value="income">Income</option>
             <option value="expense">Expense</option>
-            <option value="debt">Debt (Given/Taken)</option>
+            <option value="debt">Debt Given/Taken</option>
             <option value="receivable">Receivable</option>
         </select>
     </div>
 
     <div class="form-group">
         <label>Category / Description</label>
-        <select id="txCategory">
-            <!-- Dynamically populated categories -->
-        </select>
+        <input type="text" id="txDesc" placeholder="Description or Category name">
     </div>
 
     <div class="form-group">
         <label>Amount (€)</label>
-        <input type="number" id="txAmount" placeholder="0.00" step="0.01">
+        <input type="number" id="txAmount" value="0" step="0.01">
     </div>
 
     <div class="form-group">
         <label>Payment Source / Destination</label>
         <select id="txSource">
             <option value="cash">Cash Wallet</option>
-            <!-- Dynamically populated cards -->
         </select>
     </div>
 
@@ -98,163 +92,124 @@
 </div>
 
 <script>
-    // Local application state initialization
-    let appState = {
-        cash: 300.00,
-        cards: [
-            { id: 1, name: "Main Card", balance: 1000.00 }
-        ],
+    // State management storage initialization
+    let state = {
+        cash: 500.00,
+        cards: [{ id: 1, name: "Main Visa", balance: 1200.00 }],
         categories: ["Rent/Housing", "Food & Groceries", "Transport", "Utilities", "Shopping", "Entertainment"],
         transactions: []
     };
 
-    function initApp() {
+    function init() {
         renderCards();
         renderCategories();
-        updateDropdowns();
+        updateSourcesDropdown();
+        updateSummary();
     }
 
-    // Render Cards in Settings & Update Dashboard Balances
     function renderCards() {
         const list = document.getElementById('cardList');
         list.innerHTML = '';
         let totalCardBal = 0;
         
-        appState.cards.forEach((card, index) => {
+        state.cards.forEach((card, index) => {
             totalCardBal += card.balance;
             list.innerHTML += `
-                <div class="item-row">
+                <div class="card-item">
                     <span><strong>${card.name}</strong>: €${card.balance.toFixed(2)}</span>
                     <button class="danger" onclick="deleteCard(${index})">Delete</button>
                 </div>
             `;
         });
-        
         document.getElementById('totalCards').innerText = `€${totalCardBal.toFixed(2)}`;
-        document.getElementById('totalCash').innerText = `€${appState.cash.toFixed(2)}`;
+        document.getElementById('totalCash').innerText = `€${state.cash.toFixed(2)}`;
     }
 
     function addCard() {
-        const nameInput = document.getElementById('newCardName');
-        const balInput = document.getElementById('newCardBalance');
-        const name = nameInput.value.trim();
-        const balance = parseFloat(balInput.value);
-
-        if (name) {
-            appState.cards.push({ id: Date.now(), name, balance: isNaN(balance) ? 0 : balance });
-            nameInput.value = '';
-            balInput.value = '';
-            initApp();
-        } else {
-            alert("Please enter a valid card name.");
+        const name = document.getElementById('newCardName').value;
+        const balance = parseFloat(document.getElementById('newCardBalance').value) || 0;
+        if(name) {
+            state.cards.push({ id: Date.now(), name, balance });
+            document.getElementById('newCardName').value = '';
+            document.getElementById('newCardBalance').value = '';
+            init();
         }
     }
 
     function deleteCard(index) {
-        appState.cards.splice(index, 1);
-        initApp();
+        state.cards.splice(index, 1);
+        init();
     }
 
-    // Render Expense Categories in Settings
     function renderCategories() {
         const list = document.getElementById('categoryList');
         list.innerHTML = '';
-        
-        appState.categories.forEach((cat, index) => {
+        state.categories.forEach((cat, index) => {
             list.innerHTML += `
-                <div class="item-row">
+                <div class="category-item">
                     <span>${cat}</span>
                     <button class="danger" onclick="deleteCategory(${index})">Delete</button>
                 </div>
             `;
         });
-        updateDropdowns();
+        updateSourcesDropdown();
     }
 
     function addCategory() {
-        const catInput = document.getElementById('newCategoryName');
-        const name = catInput.value.trim();
-
-        if (name && !appState.categories.includes(name)) {
-            appState.categories.push(name);
-            catInput.value = '';
+        const name = document.getElementById('newCategoryName').value;
+        if(name && !state.categories.includes(name)) {
+            state.categories.push(name);
+            document.getElementById('newCategoryName').value = '';
             renderCategories();
-        } else {
-            alert("Category name is either empty or already exists.");
         }
     }
 
     function deleteCategory(index) {
-        appState.categories.splice(index, 1);
+        state.categories.splice(index, 1);
         renderCategories();
     }
 
-    // Update Dropdowns for Categories & Sources (Cash/Cards)
-    function updateDropdowns() {
-        // Category dropdown
-        const catSelect = document.getElementById('txCategory');
-        catSelect.innerHTML = '';
-        appState.categories.forEach(cat => {
-            catSelect.innerHTML += `<option value="${cat}">${cat}</option>`;
-        });
-
-        // Source dropdown (Cash + Cards)
+    function updateSourcesDropdown() {
         const sourceSelect = document.getElementById('txSource');
         sourceSelect.innerHTML = `<option value="cash">Cash Wallet</option>`;
-        appState.cards.forEach(card => {
+        state.cards.forEach(card => {
             sourceSelect.innerHTML += `<option value="card_${card.id}">${card.name}</option>`;
         });
     }
 
-    // Save Transactions and update respective balances
+    function toggleTxSource() {
+        // Handle logic adaptations per transaction type if required
+    }
+
     function saveTransaction() {
         const type = document.getElementById('txType').value;
-        const category = document.getElementById('txCategory').value;
         const amount = parseFloat(document.getElementById('txAmount').value);
         const source = document.getElementById('txSource').value;
-
+        
         if (isNaN(amount) || amount <= 0) {
-            alert("Please enter a valid amount greater than 0.");
+            alert("Please provide a valid non-zero amount.");
             return;
         }
 
-        // Handle balance calculation based on source type (Cash vs Card)
-        let isAddition = (type === 'income' || type === 'receivable');
-
+        // Adjust balance based on source selection (Cash vs Card)
         if (source === 'cash') {
-            if (isAddition) {
-                appState.cash += amount;
-            } else {
-                if (appState.cash < amount) {
-                    alert("Warning: Insufficient cash balance!");
-                }
-                appState.cash -= amount;
-            }
+            if (type === 'income' || type === 'receivable') state.cash += amount;
+            else state.cash -= amount;
         } else {
             const cardId = parseInt(source.replace('card_', ''));
-            const card = appState.cards.find(c => c.id === cardId);
+            const card = state.cards.find(c => c.id === cardId);
             if (card) {
-                if (isAddition) {
-                    card.balance += amount;
-                } else {
-                    if (card.balance < amount) {
-                        alert("Warning: Insufficient card balance!");
-                    }
-                    card.balance -= amount;
-                }
+                if (type === 'income' || type === 'receivable') card.balance += amount;
+                else card.balance -= amount;
             }
         }
-
-        // Store transaction log record
-        appState.transactions.push({ type, category, amount, source, date: new Date().toLocaleDateString() });
         
-        document.getElementById('txAmount').value = '';
-        initApp();
-        alert("Transaction recorded successfully and dashboard updated!");
+        init();
+        alert("Transaction recorded successfully!");
     }
 
-    // Run initialization on load
-    initApp();
+    // Initialize on load
+    init();
 </script>
 
 </body>
