@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Moneyfy Pro Wallet</title>
+    <title>Shakhawat's Wallet</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome for Icons -->
@@ -523,6 +523,13 @@
             <h3 id="actionPromptTitle" class="font-bold text-gray-900 dark:text-white text-base">Enter Value</h3>
             <p id="actionPromptDesc" class="text-xs text-gray-500">Provide required number input</p>
             <input type="number" step="0.01" id="actionPromptInput" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none">
+            
+            <!-- Updated: Account Selection Container for Installment/Collection Prompts -->
+            <div id="actionPromptAccountContainer" class="space-y-1 hidden">
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Payment Method / Account</label>
+                <select id="actionPromptAccountSelect" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none"></select>
+            </div>
+
             <div class="grid grid-cols-2 gap-2">
                 <button onclick="closeActionPrompt()" class="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2.5 rounded-xl font-semibold text-xs transition">Cancel</button>
                 <button id="actionPromptConfirmBtn" class="bg-brand-500 text-white py-2.5 rounded-xl font-semibold text-xs hover:bg-brand-600 transition">Confirm</button>
@@ -644,11 +651,7 @@
             localStorage.setItem('moneyfy_pro_data_v4', JSON.stringify(appData));
         }
 
-        // ==========================================
-        // FIX 1: Dynamic Net Balance Synchronization
-        // ==========================================
         function getNetBalance() {
-            /** Dynamically computes the global net balance from live account sums */
             return appData.accounts.reduce((sum, acc) => sum + acc.balance, 0);
         }
 
@@ -783,20 +786,30 @@
             document.getElementById('customModal').classList.add('hidden');
         }
 
-        function openActionPrompt(title, desc, defaultValue, onConfirm) {
+        function openActionPrompt(title, desc, defaultValue, onConfirm, showAccountSelect = false) {
             document.getElementById('actionPromptTitle').innerText = title;
             document.getElementById('actionPromptDesc').innerText = desc;
             const inputEl = document.getElementById('actionPromptInput');
             inputEl.value = defaultValue;
             
+            const accContainer = document.getElementById('actionPromptAccountContainer');
+            if (showAccountSelect && accContainer) {
+                accContainer.classList.remove('hidden');
+                const accSelect = document.getElementById('actionPromptAccountSelect');
+                accSelect.innerHTML = appData.accounts.map(a => `<option value="${a.name}">${a.name} (${appData.currency}${a.balance.toFixed(2)})</option>`).join('');
+            } else if (accContainer) {
+                accContainer.classList.add('hidden');
+            }
+
             const confirmBtn = document.getElementById('actionPromptConfirmBtn');
             const newBtn = confirmBtn.cloneNode(true);
             confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
             
             newBtn.addEventListener('click', () => {
                 const val = parseFloat(inputEl.value);
+                const selectedAcc = showAccountSelect ? document.getElementById('actionPromptAccountSelect').value : null;
                 closeActionPrompt();
-                onConfirm(val);
+                onConfirm(val, selectedAcc);
             });
 
             document.getElementById('actionPromptModal').classList.remove('hidden');
@@ -1052,18 +1065,23 @@
             const remainingBalance = debt.total - debt.paid;
             const defaultInstallment = debt.payType === 'percentage' ? (debt.total * debt.payValue / 100) : debt.payValue;
 
-            openActionPrompt("Pay Installment", `Remaining balance: ${appData.currency}${remainingBalance.toFixed(2)}`, defaultInstallment.toFixed(2), (installment) => {
+            // Updated: Prompt with account selection enabled (Request #1)
+            openActionPrompt("Pay Installment", `Remaining balance: ${appData.currency}${remainingBalance.toFixed(2)}`, defaultInstallment.toFixed(2), (installment, selectedAccount) => {
                 if (isNaN(installment) || installment <= 0) return;
                 if (installment > remainingBalance) installment = remainingBalance;
 
                 debt.paid += installment;
-                const acc = appData.accounts.find(a => a.name === debt.account);
-                if (acc) acc.balance -= installment;
+                const accountName = selectedAccount || debt.account || appData.accounts[0].name;
+                debt.account = accountName;
+                const acc = appData.accounts.find(a => a.name === accountName);
+                if (acc) {
+                    acc.balance -= installment;
+                }
 
                 saveToStorage();
                 renderAll();
-                showModal('Debt Updated', `Paid ${appData.currency}${installment.toFixed(2)} from ${debt.account || 'Cash'}.`);
-            });
+                showModal('Debt Updated', `Paid ${appData.currency}${installment.toFixed(2)} from ${accountName}.`);
+            }, true);
         }
 
         function deleteDebt(id) {
@@ -1093,18 +1111,24 @@
             if (!rec) return;
 
             const remainingBalance = rec.total - rec.collected;
-            openActionPrompt("Collect Payment", `Pending collection: ${appData.currency}${remainingBalance.toFixed(2)}`, remainingBalance.toFixed(2), (collection) => {
+            
+            // Updated: Prompt with account selection enabled (Request #2)
+            openActionPrompt("Collect Payment", `Pending collection: ${appData.currency}${remainingBalance.toFixed(2)}`, remainingBalance.toFixed(2), (collection, selectedAccount) => {
                 if (isNaN(collection) || collection <= 0) return;
                 if (collection > remainingBalance) collection = remainingBalance;
 
                 rec.collected += collection;
-                const acc = appData.accounts.find(a => a.name === rec.account);
-                if (acc) acc.balance += collection;
+                const accountName = selectedAccount || rec.account || appData.accounts[0].name;
+                rec.account = accountName;
+                const acc = appData.accounts.find(a => a.name === accountName);
+                if (acc) {
+                    acc.balance += collection;
+                }
 
                 saveToStorage();
                 renderAll();
-                showModal('Collection Recorded', `Credited ${appData.currency}${collection.toFixed(2)} to ${rec.account || 'Cash'}.`);
-            });
+                showModal('Collection Recorded', `Credited ${appData.currency}${collection.toFixed(2)} to ${accountName}.`);
+            }, true);
         }
 
         function deleteReceivable(id) {
@@ -1113,9 +1137,6 @@
             renderAll();
         }
 
-        // ==========================================
-        // FIX 3: Savings Goal Contribution (Internal Transfer)
-        // ==========================================
         function addSavingsGoal(e) {
             e.preventDefault();
             const title = document.getElementById('goal-title').value.trim();
@@ -1140,7 +1161,6 @@
                 if (isNaN(amount) || amount <= 0) return;
                 if (amount > remaining) amount = remaining;
 
-                // Execute safe internal transfer from selected source account
                 const sourceAccountName = document.getElementById('goal-source-account')?.value || appData.accounts[0].name;
                 const sourceAcc = appData.accounts.find(a => a.name === sourceAccountName);
 
@@ -1165,7 +1185,6 @@
             renderAll();
         }
 
-        // Category & Budget management
         function addCustomExpenseCategory() {
             const name = document.getElementById('new-exp-cat').value.trim();
             const limit = parseFloat(document.getElementById('new-exp-limit').value);
@@ -1226,11 +1245,7 @@
             renderAll();
         }
 
-        // ==========================================
-        // FIX 2: Expense Comparison Metric ("Exp. vs")
-        // ==========================================
         function calculateExpenseComparison(currentMonthExpenses, previousMonthExpenses) {
-            /** Computes safe percentage changes handling zero-division edge cases */
             if (previousMonthExpenses === 0) {
                 return currentMonthExpenses > 0 ? 100.0 : 0.0;
             }
@@ -1332,9 +1347,8 @@
         function renderDashboard() {
             const totalSalary = appData.incomes.filter(i => i.category === 'Salary').reduce((acc, curr) => acc + curr.amount, 0);
             const totalExpense = appData.expenses.reduce((acc, curr) => acc + curr.amount, 0);
-            const netBalance = getNetBalance(); // Using upgraded dynamic sync logic
+            const netBalance = getNetBalance();
 
-            // Compute current vs previous month expense comparison
             const now = new Date();
             const currMonthKey = now.toISOString().slice(0, 7);
             const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
